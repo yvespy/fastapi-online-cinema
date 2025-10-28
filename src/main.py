@@ -1,7 +1,7 @@
 from fastapi import FastAPI
-from database import engine
-from models import Base
-from routes import movies
+from .database import engine
+from .models import Base
+from .routes import movies, auth
 
 app = FastAPI(
     title="Online Cinema API",
@@ -19,3 +19,4 @@ async def read_root():
     return {"message": "Hello World"}
 
 app.include_router(movies.router)
+app.include_router(auth.router)
