@@ -1,3 +1,4 @@
+celery
 aiosqlite==0.21.0
 alembic==1.17.0
 annotated-types==0.7.0

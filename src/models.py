@@ -41,10 +41,10 @@ class User(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     group_id = Column(Integer, ForeignKey("user_groups.id"), nullable=False)
     group = relationship("UserGroup", back_populates="users")
-    activation_token = relationship("ActivationToken", back_populates="users", uselist=False)
-    password_reset_token = relationship("PasswordResetToken", back_populates="users", uselist=False)
-    refresh_token = relationship("RefreshToken", back_populates="users", cascade="all, delete-orphan")
-    profile = relationship("UserProfile", back_populates="users", uselist=False)
+    activation_token = relationship("ActivationToken", back_populates="user", uselist=False)
+    password_reset_token = relationship("PasswordResetToken", back_populates="user", uselist=False)
+    refresh_token = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+    profile = relationship("UserProfileModel", back_populates="user", uselist=False)
 
 
 class UserProfileModel(Base):
@@ -55,7 +55,7 @@ class UserProfileModel(Base):
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
     avatar = Column(String(255), nullable=False)
-    gender = Column(SqlEnum(UserGroupEnum), nullable=False)
+    gender = Column(SqlEnum(GenderEnum), nullable=False)
     date_of_birth = Column(DateTime, nullable=False)
     info = Column(Text, nullable=False)
 
