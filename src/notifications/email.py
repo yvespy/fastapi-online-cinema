@@ -1,11 +1,16 @@
+import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from dotenv import load_dotenv
 
-SMTP_SERVER = "sandbox.smtp.mailtrap.io"
-SMTP_PORT = 587
-SENDER_EMAIL = "8a308993f64669"
-SENDER_PASSWORD = "3f7911d441bcf0"
+load_dotenv()
+
+SMTP_SERVER = os.getenv("SMTP_SERVER")
+SMTP_PORT = int(os.getenv("SMTP_PORT"), 587)
+SENDER_EMAIL = os.getenv("SMTP_USERNAME")
+SENDER_PASSWORD = os.getenv("SMTP_PASSWORD")
+
 
 def send_activation_email(recipient_email: str, activation_link: str):
     subject = "Activate your account"
