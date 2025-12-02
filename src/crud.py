@@ -1,18 +1,22 @@
 from datetime import datetime, timedelta
 
 from fastapi import HTTPException, Depends
+from pydantic import EmailStr
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from starlette import status
 
 from . import models
 from .database import get_db
-from .models import Film, User, UserGroup, UserGroupEnum, ActivationToken
+from .models import Film, User, UserGroup, UserGroupEnum, ActivationToken, RefreshToken
 from .notifications.email import send_activation_email
 from .schemas import FilmCreate, FilmUpdate, UserRegistrationRequestSchema
 from passlib.context import CryptContext
 
+from .security.passwords import verify_password
+from .security.token_manager import create_access_token
 from .utils import generate_secure_token
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -62,7 +66,7 @@ async def delete_film(db: AsyncSession, film_id: int):
     return db_film
 
 
-async def get_user_by_email(db: AsyncSession, email: str):
+async def get_user_by_email(db: AsyncSession, email: EmailStr):
     result = await db.execute(select(models.User).where(models.User.email == email))
     return result.scalar_one_or_none()
 
@@ -172,3 +176,57 @@ async def resend_activation_email(user_email: str, db: AsyncSession):
         send_activation_email(user_email, activation_link)
 
         return {"message": "Activation link has been sent."}
+
+
+async def login_user(db: AsyncSession, email: EmailStr, password: str):
+    user = await get_user_by_email(db, email)
+
+    if not user or not verify_password(password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password."
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is not activated."
+        )
+
+    access_token = create_access_token(
+        data={"sub": user.id},
+        expires_delta=timedelta(minutes=30)
+    )
+
+    stmt = select(RefreshToken).filter_by(user_id=user.id)
+    result = await db.execute(stmt)
+    old_token = result.scalar_one_or_none()
+    if old_token:
+        await db.delete(old_token)
+        await db.commit()
+
+    new_refresh_token = generate_secure_token(32)
+    refresh_obj = RefreshToken(user_id=user.id, token=new_refresh_token)
+    db.add(refresh_obj)
+    await db.commit()
+
+    return {
+        "access_token": access_token,
+        "refresh_token": new_refresh_token,
+    }
+
+
+async def logout_user(db: AsyncSession, user_id: int):
+    stmt = select(RefreshToken).filter_by(user_id=user_id)
+    result = await db.execute(stmt)
+    token = result.scalar_one_or_none()
+
+    if token:
+        await db.delete(token)
+        await db.commit()
+
+
+async def get_refresh_token(db: AsyncSession, token: str):
+    result = await db.execute(select(models.RefreshToken).where(models.RefreshToken.token == token).options(
+        selectinload(models.RefreshToken.user)))
+    return result.scalar_one_or_none()

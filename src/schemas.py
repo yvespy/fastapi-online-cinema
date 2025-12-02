@@ -1,9 +1,4 @@
-from datetime import datetime
-from enum import Enum
-
 from pydantic import BaseModel, EmailStr, field_validator
-
-from src.models import UserGroup
 
 
 class FilmBase(BaseModel):
