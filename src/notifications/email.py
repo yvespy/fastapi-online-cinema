@@ -34,3 +34,51 @@ def send_activation_email(recipient_email: str, activation_link: str):
             server.sendmail(SENDER_EMAIL, recipient_email, message.as_string())
     except Exception as e:
         print(f"Failed to send email: {e}")
+
+
+def send_password_reset_email(recipient_email: str, password_reset_link: str):
+    subject = "Password reset request"
+    body = f"""
+    <p>Hello,</p>
+    <p>You requested a password reset request. Please click the link below:</p>
+    <a href="{password_reset_link}">{password_reset_link}</a>
+    <p>This link is valid for 1 hours.</p>
+    """
+
+    message = MIMEMultipart()
+    message["From"] = SENDER_EMAIL
+    message["To"] = recipient_email
+    message["Subject"] = subject
+    message.attach(MIMEText(body, "html"))
+
+    try:
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SENDER_EMAIL, SENDER_PASSWORD)
+            server.sendmail(SENDER_EMAIL, recipient_email, message.as_string())
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+
+
+def send_password_reset_complete_email(recipient_email: str, login_link: str):
+    subject = "Your Password Has Been Reset"
+    body = f"""
+    <p>Hello,</p>
+    <p>Your password has been successfully reset.</p>
+    <p>You can log in using the link below:</p>
+    <a href="{login_link}">{login_link}</a>
+    """
+
+    message = MIMEMultipart()
+    message["From"] = SENDER_EMAIL
+    message["To"] = recipient_email
+    message["Subject"] = subject
+    message.attach(MIMEText(body, "html"))
+
+    try:
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SENDER_EMAIL, SENDER_PASSWORD)
+            server.sendmail(SENDER_EMAIL, recipient_email, message.as_string())
+    except Exception as e:
+        print(f"Failed to send email: {e}")

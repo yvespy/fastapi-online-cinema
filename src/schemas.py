@@ -42,6 +42,9 @@ class UserRegistrationRequestSchema(BaseEmailPasswordSchema):
 class PasswordRequestSchema(BaseModel):
     email: EmailStr
 
+class ChangePasswordRequestSchema(BaseModel):
+    old_password: str
+    new_password: str
 
 class PasswordResetCompleteRequestSchema(BaseEmailPasswordSchema):
     token: str

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 
 from fastapi import HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import EmailStr
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,16 +11,18 @@ from starlette import status
 
 from . import models
 from .database import get_db
-from .models import Film, User, UserGroup, UserGroupEnum, ActivationToken, RefreshToken
-from .notifications.email import send_activation_email
+from .models import Film, User, UserGroup, UserGroupEnum, ActivationToken, RefreshToken, PasswordResetToken
+from .notifications.email import send_activation_email, send_password_reset_email, send_password_reset_complete_email
 from .schemas import FilmCreate, FilmUpdate, UserRegistrationRequestSchema
 from passlib.context import CryptContext
 
-from .security.passwords import verify_password
-from .security.token_manager import create_access_token
+from .security.passwords import verify_password, hash_password
+from .security.token_manager import create_access_token, decode_token
 from .utils import generate_secure_token
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+security = HTTPBearer()
 
 
 async def create_film(db: AsyncSession, film: FilmCreate):
@@ -194,7 +197,7 @@ async def login_user(db: AsyncSession, email: EmailStr, password: str):
         )
 
     access_token = create_access_token(
-        data={"sub": user.id},
+        data={"sub": str(user.id)},
         expires_delta=timedelta(minutes=30)
     )
 
@@ -230,3 +233,109 @@ async def get_refresh_token(db: AsyncSession, token: str):
     result = await db.execute(select(models.RefreshToken).where(models.RefreshToken.token == token).options(
         selectinload(models.RefreshToken.user)))
     return result.scalar_one_or_none()
+
+
+async def get_current_user(
+        credentials: HTTPAuthorizationCredentials = Depends(security),
+        db: AsyncSession = Depends(get_db)
+) -> User:
+    token = credentials.credentials
+    payload = decode_token(token)
+
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token."
+        )
+
+    user_id = int(payload.get("sub"))
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload."
+        )
+
+    result = await db.execute(select(User).where(User.id == int(user_id)))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found."
+        )
+
+    return user
+
+
+async def request_password_reset_token(db: AsyncSession, email: EmailStr):
+    user = await get_user_by_email(db, email)
+    if not user or not user.is_active:
+        return
+
+    stmt = select(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
+    result = await db.execute(stmt)
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        await db.delete(existing)
+        await db.commit()
+
+    token = generate_secure_token(32)
+    expires_at = datetime.utcnow() + timedelta(hours=1)
+
+    reset_obj = PasswordResetToken(
+        user_id=user.id,
+        token=token,
+        expires_at=expires_at
+    )
+    db.add(reset_obj)
+    await db.commit()
+
+    reset_link = f"http://127.0.0.1:8000/reset-password?token={token}"
+    send_password_reset_email(user.email, reset_link)
+
+
+async def reset_password(db: AsyncSession, email: EmailStr, token: str, new_password: str):
+    user = await get_user_by_email(db, email)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid token or email.")
+
+    stmt = select(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
+    result = await db.execute(stmt)
+    token_obj = result.scalar_one_or_none()
+
+    if not token_obj:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token.")
+
+    if token_obj.token != token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token.")
+
+    if token_obj.expires_at < datetime.utcnow():
+        await db.delete(token_obj)
+        await db.commit()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token expired.")
+
+    user.hashed_password = pwd_context.hash(new_password)
+
+    await db.delete(token_obj)
+    await db.commit()
+    await db.refresh(user)
+
+    login_link = "http://127.0.0.1:8000/auth/login/"
+    send_password_reset_complete_email(user.email, login_link)
+
+    return True
+
+
+async def change_password(db: AsyncSession, user: User, old_password: str, new_password: str):
+    if not verify_password(old_password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect old password."
+        )
+
+    user.hashed_password = hash_password(new_password)
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return True
