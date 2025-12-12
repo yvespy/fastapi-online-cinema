@@ -1,5 +1,7 @@
 from pydantic import BaseModel, EmailStr, field_validator
 
+from src.security.passwords import validate_password_strength
+
 
 class FilmBase(BaseModel):
     title: str
@@ -34,6 +36,10 @@ class BaseEmailPasswordSchema(BaseModel):
     def validate_email(cls, value):
         return value.lower()
 
+    @field_validator("password")
+    def validate_password(cls, value):
+        return validate_password_strength(value)
+
 
 class UserRegistrationRequestSchema(BaseEmailPasswordSchema):
     pass
@@ -42,9 +48,15 @@ class UserRegistrationRequestSchema(BaseEmailPasswordSchema):
 class PasswordRequestSchema(BaseModel):
     email: EmailStr
 
+
 class ChangePasswordRequestSchema(BaseModel):
     old_password: str
     new_password: str
+
+    @field_validator("new_password")
+    def validate_password(cls, value):
+        return validate_password_strength(value)
+
 
 class PasswordResetCompleteRequestSchema(BaseEmailPasswordSchema):
     token: str
