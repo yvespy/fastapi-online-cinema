@@ -1,8 +1,8 @@
-"""Add movie and user models
+"""initial models for users
 
-Revision ID: 146adcf5d143
+Revision ID: df0bdc3367a2
 Revises: 
-Create Date: 2025-11-14 00:28:29.764130
+Create Date: 2025-12-17 17:55:41.911511
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '146adcf5d143'
+revision: str = 'df0bdc3367a2'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -58,7 +58,8 @@ def upgrade() -> None:
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('token')
+    sa.UniqueConstraint('token'),
+    sa.UniqueConstraint('user_id', name='uq_activation_token_user_id')
     )
     op.create_index(op.f('ix_activation_tokens_id'), 'activation_tokens', ['id'], unique=False)
     op.create_table('password_reset_tokens',
@@ -68,7 +69,8 @@ def upgrade() -> None:
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('token')
+    sa.UniqueConstraint('token'),
+    sa.UniqueConstraint('user_id', name='uq_password_reset_token_user_id')
     )
     op.create_index(op.f('ix_password_reset_tokens_id'), 'password_reset_tokens', ['id'], unique=False)
     op.create_table('refresh_tokens',
@@ -84,12 +86,12 @@ def upgrade() -> None:
     op.create_table('user_profiles',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('first_name', sa.String(length=100), nullable=False),
-    sa.Column('last_name', sa.String(length=100), nullable=False),
-    sa.Column('avatar', sa.String(length=255), nullable=False),
-    sa.Column('gender', sa.Enum('MAN', 'WOMAN', name='genderenum'), nullable=False),
-    sa.Column('date_of_birth', sa.DateTime(), nullable=False),
-    sa.Column('info', sa.Text(), nullable=False),
+    sa.Column('first_name', sa.String(length=100), nullable=True),
+    sa.Column('last_name', sa.String(length=100), nullable=True),
+    sa.Column('avatar', sa.String(length=255), nullable=True),
+    sa.Column('gender', sa.Enum('MAN', 'WOMAN', name='genderenum'), nullable=True),
+    sa.Column('date_of_birth', sa.DateTime(), nullable=True),
+    sa.Column('info', sa.Text(), nullable=True),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('user_id')

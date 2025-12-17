@@ -1,7 +1,8 @@
 from datetime import datetime, timezone, timedelta
 from enum import Enum
 
-from sqlalchemy import Column, Integer, String, Float, Enum as SqlEnum, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Float, Enum as SqlEnum, Boolean, DateTime, ForeignKey, Text, \
+    UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
@@ -52,12 +53,12 @@ class UserProfileModel(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
-    first_name = Column(String(100), nullable=False)
-    last_name = Column(String(100), nullable=False)
-    avatar = Column(String(255), nullable=False)
-    gender = Column(SqlEnum(GenderEnum), nullable=False)
-    date_of_birth = Column(DateTime, nullable=False)
-    info = Column(Text, nullable=False)
+    first_name = Column(String(100), nullable=True)
+    last_name = Column(String(100), nullable=True)
+    avatar = Column(String(255), nullable=True)
+    gender = Column(SqlEnum(GenderEnum), nullable=True)
+    date_of_birth = Column(DateTime, nullable=True)
+    info = Column(Text, nullable=True)
 
     user = relationship("User", back_populates="profile")
 
@@ -76,11 +77,19 @@ class ActivationToken(TokenBaseModel):
 
     user = relationship("User", back_populates="activation_token")
 
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_activation_token_user_id"),
+    )
+
 
 class PasswordResetToken(TokenBaseModel):
     __tablename__ = "password_reset_tokens"
 
     user = relationship("User", back_populates="password_reset_token")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_password_reset_token_user_id"),
+    )
 
 
 class RefreshToken(TokenBaseModel):
