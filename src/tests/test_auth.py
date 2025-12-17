@@ -1,84 +1,411 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
-from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
-from src.models import User, ActivationToken
-from src.security.passwords import hash_password
+from src.models import User, ActivationToken, RefreshToken
+from src.security.passwords import hash_password, verify_password
+from src.security.token_manager import create_access_token
 
 
 @pytest.mark.asyncio
-async def test_register_user_success(client: AsyncClient, test_db):
-    payload = {
-        "email": "testuser@example.com",
-        "password": "StrongPass123!"
-    }
+async def test_user_registration_success(client, db_session, seed_user_groups):
+    payload = {"email": "test@example.com", "password": "StrongPassword123!"}
 
     response = await client.post("/auth/register/", json=payload)
-
     assert response.status_code == 201
+    data = response.json()
+    assert data["email"] == payload["email"]
 
-    async with test_db() as session:
-        from sqlalchemy import select
-        from src.models import User
+    result = await db_session.execute(select(User).where(User.email == payload["email"]))
+    user = result.scalars().first()
+    assert user is not None
+    assert not user.is_active
 
-        stmt = select(User).where(User.email == payload["email"])
-        result = await session.execute(stmt)
-        user = result.scalar_one()
-
-        assert user.is_active is False
-
-
-@pytest.mark.asyncio
-async def test_register_user_conflict(client: AsyncClient):
-    payload = {
-        "email": "duplicate@example.com",
-        "password": "StrongPass123!"
-    }
-
-    first = await client.post("/auth/register/", json=payload)
-    assert first.status_code == 201
-
-    second = await client.post("/auth/register/", json=payload)
-
-    assert second.status_code == 409
-    assert "already exists" in second.json()["detail"]
+    result = await db_session.execute(select(ActivationToken).where(ActivationToken.user_id == user.id))
+    token = result.scalars().first()
+    assert token is not None
+    assert token.token is not None
 
 
 @pytest.mark.asyncio
-async def test_activate_user_success(async_client: AsyncClient, async_session: AsyncSession):
+async def test_activate_user_success(client, db_session, seed_user_groups):
     user = User(
-        email="test_activate@example.com",
-        hashed_password=hash_password("password123"),
+        email="inactive@example.com",
+        hashed_password=hash_password("StrongPassword123!"),
         is_active=False,
-        group="USER",
+        group_id=1,
     )
-    async_session.add(user)
-    await async_session.flush()  # get user.id
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
 
-    token = ActivationToken(
+    activation_token = ActivationToken(
         user_id=user.id,
-        token="valid-test-token",
-        expires_at=datetime.utcnow() + timedelta(hours=1),
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
     )
-    async_session.add(token)
-    await async_session.commit()
+    db_session.add(activation_token)
+    await db_session.commit()
+    await db_session.refresh(activation_token)
 
-    response = await async_client.post("/auth/activate/?token=valid-test-token")
+    token_id = activation_token.id
+
+    response = await client.post(
+        f"/auth/activate/?token={activation_token.token}"
+    )
 
     assert response.status_code == 200
-    assert response.json()["message"] == "User successfully activated."
+    assert response.json() == {
+        "message": "User successfully activated."
+    }
 
-    refreshed_user = await async_session.get(User, user.id)
-    assert refreshed_user.is_active is True
+    await db_session.refresh(user)
+    assert user.is_active is True
 
-    deleted_token = await async_session.get(ActivationToken, token.id)
-    assert deleted_token is None
+    db_session.expire_all()
+
+    result = await db_session.execute(
+        select(ActivationToken).where(ActivationToken.id == token_id)
+    )
+    token_in_db = result.scalar_one_or_none()
+
+    assert token_in_db is None
 
 
 @pytest.mark.asyncio
-async def test_activate_user_invalid_token(async_client: AsyncClient):
-    response = await async_client.post("/auth/activate/?token=wrong-token")
+async def test_activate_user_invalid_token(client):
+    response = await client.post("/auth/activate/?token=invalidtoken")
     assert response.status_code == 400
     assert response.json()["detail"] == "Invalid or expired activation token."
+
+
+@pytest.mark.asyncio
+async def test_activate_user_expired_token(
+        client,
+        db_session,
+        seed_user_groups,
+):
+    user = User(
+        email="expired@example.com",
+        hashed_password=hash_password("StrongPassword123!"),
+        is_active=False,
+        group_id=1,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    activation_token = ActivationToken(
+        user_id=user.id,
+        expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),  # 👈 expired
+    )
+    db_session.add(activation_token)
+    await db_session.commit()
+    await db_session.refresh(activation_token)
+
+    token_id = activation_token.id
+
+    response = await client.post(
+        f"/auth/activate/?token={activation_token.token}"
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid or expired activation token."
+
+    await db_session.refresh(user)
+    assert user.is_active is False
+
+    db_session.expire_all()
+
+    result = await db_session.execute(
+        select(ActivationToken).where(ActivationToken.id == token_id)
+    )
+    token_in_db = result.scalar_one_or_none()
+
+    assert token_in_db is None
+
+
+@pytest.mark.asyncio
+async def test_activate_user_token_already_used(
+        client,
+        db_session,
+        seed_user_groups,
+):
+    user = User(
+        email="used@example.com",
+        hashed_password=hash_password("StrongPassword123!"),
+        is_active=False,
+        group_id=1,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    activation_token = ActivationToken(
+        user_id=user.id,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+    )
+    db_session.add(activation_token)
+    await db_session.commit()
+    await db_session.refresh(activation_token)
+
+    token_value = activation_token.token
+
+    response_first = await client.post(
+        f"/auth/activate/?token={token_value}"
+    )
+
+    assert response_first.status_code == 200
+
+    response_second = await client.post(
+        f"/auth/activate/?token={token_value}"
+    )
+
+    assert response_second.status_code == 400
+    assert response_second.json()["detail"] == "Invalid or expired activation token."
+
+    await db_session.refresh(user)
+    assert user.is_active is True
+
+
+@pytest.mark.asyncio
+async def test_login_success(
+        client,
+        db_session,
+        seed_user_groups,
+):
+    user = User(
+        email="login@example.com",
+        hashed_password=hash_password("StrongPassword123!"),
+        is_active=True,
+        group_id=1,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    response = await client.post(
+        "/auth/login/",
+        json={
+            "email": "login@example.com",
+            "password": "StrongPassword123!",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert "access_token" in data
+    assert "refresh_token" in data
+    assert isinstance(data["access_token"], str)
+    assert isinstance(data["refresh_token"], str)
+
+    result = await db_session.execute(
+        select(RefreshToken).where(RefreshToken.user_id == user.id)
+    )
+    refresh = result.scalar_one_or_none()
+
+    assert refresh is not None
+    assert refresh.token == data["refresh_token"]
+
+
+@pytest.mark.asyncio
+async def test_login_invalid_email(client):
+    response = await client.post(
+        "/auth/login/",
+        json={
+            "email": "wrong@example.com",
+            "password": "StrongPassword123!",
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Incorrect email or password."
+
+
+@pytest.mark.asyncio
+async def test_login_invalid_password(
+        client,
+        db_session,
+        seed_user_groups,
+):
+    user = User(
+        email="wrongpass@example.com",
+        hashed_password=hash_password("CorrectPassword123!"),
+        is_active=True,
+        group_id=1,
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    response = await client.post(
+        "/auth/login/",
+        json={
+            "email": "wrongpass@example.com",
+            "password": "AnotherValidPassword123!",
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Incorrect email or password."
+
+
+@pytest.mark.asyncio
+async def test_login_user_not_activated(
+        client,
+        db_session,
+        seed_user_groups,
+):
+    user = User(
+        email="login_inactive@example.com",
+        hashed_password=hash_password("StrongPassword123!"),
+        is_active=False,
+        group_id=1,
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    response = await client.post(
+        "/auth/login/",
+        json={
+            "email": "login_inactive@example.com",
+            "password": "StrongPassword123!",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "User account is not activated."
+
+
+@pytest.mark.asyncio
+async def test_refresh_token_success(
+        client,
+        db_session,
+        seed_user_groups,
+):
+    user = User(
+        email="refresh_success@example.com",
+        hashed_password=hash_password("StrongPassword123!"),
+        is_active=True,
+        group_id=1,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    refresh_token = RefreshToken(
+        user_id=user.id,
+        token="valid_refresh_token_123",
+    )
+    db_session.add(refresh_token)
+    await db_session.commit()
+
+    response = await client.post(
+        "/auth/refresh/",
+        json={"refresh_token": "valid_refresh_token_123"},
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert "access_token" in data
+    assert isinstance(data["access_token"], str)
+    assert len(data["access_token"]) > 10
+
+
+@pytest.mark.asyncio
+async def test_refresh_token_not_found(
+        client,
+        db_session,
+):
+    response = await client.post(
+        "/auth/refresh/",
+        json={"refresh_token": "non_existing_token"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Refresh token not found."
+
+
+@pytest.mark.asyncio
+async def test_logout_success(
+        client,
+        db_session,
+        seed_user_groups,
+):
+    user = User(
+        email="logout@example.com",
+        hashed_password=hash_password("Password123!"),
+        is_active=True,
+        group_id=1,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    refresh = RefreshToken(
+        user_id=user.id,
+        token="valid_refresh_token",
+    )
+    db_session.add(refresh)
+    await db_session.commit()
+
+    response = await client.post(
+        "/auth/logout/",
+        params={"token": "valid_refresh_token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"message": "Logged out successfully."}
+
+    result = await db_session.execute(
+        select(RefreshToken).where(RefreshToken.token == "valid_refresh_token")
+    )
+    assert result.scalars().first() is None
+
+
+@pytest.mark.asyncio
+async def test_logout_invalid_token(
+        client,
+        db_session,
+        seed_user_groups,
+):
+    response = await client.post(
+        "/auth/logout/",
+        params={"token": "non_existing_token"},
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid token."}
+
+
+@pytest.mark.asyncio
+async def test_change_password_success(client, db_session, test_user):
+    old_password = "OldPassword123!"
+    new_password = "NewStrongPassword123!"
+
+    test_user.hashed_password = hash_password(old_password)
+    db_session.add(test_user)
+    await db_session.commit()
+    await db_session.refresh(test_user)
+
+    access_token = create_access_token({"sub": str(test_user.id)})
+
+    response = await client.post(
+        "/auth/change-password/",
+        json={
+            "old_password": old_password,
+            "new_password": new_password,
+        },
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "Password changed successfully."
+
+    stmt = select(User).where(User.id == test_user.id)
+    result = await db_session.execute(stmt)
+    updated_user = result.scalars().first()
+    await db_session.refresh(updated_user)
+
+    assert verify_password(new_password, updated_user.hashed_password)

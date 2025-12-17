@@ -7,9 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette import status
 
+from src.config.dependencies import get_email_sender
 from src.database import get_db
 
 from src.models import User, UserGroup, UserGroupEnum, ActivationToken, RefreshToken, PasswordResetToken
+from src.notifications.interface import EmailSenderInterface
 from src.schemas import (
     UserRegistrationResponseSchema,
     UserRegistrationRequestSchema,
@@ -21,11 +23,6 @@ from src.schemas import (
     TokenRefreshRequestSchema,
     PasswordResetCompleteRequestSchema,
     ChangePasswordRequestSchema
-)
-from src.notifications.email import (
-    send_activation_email,
-    send_password_reset_email,
-    send_password_reset_complete_email
 )
 from src.security.passwords import verify_password, hash_password, validate_password_strength
 from src.security.token_manager import create_access_token, decode_token
@@ -65,7 +62,8 @@ security = HTTPBearer()
         },
     }
 )
-async def register_user_endpoint(user_data: UserRegistrationRequestSchema, db: AsyncSession = Depends(get_db)):
+async def register_user_endpoint(user_data: UserRegistrationRequestSchema, db: AsyncSession = Depends(get_db),
+                                 email_sender: EmailSenderInterface = Depends(get_email_sender)):
     stmt = select(User).where(User.email == user_data.email)
     result = await db.execute(stmt)
     existing_user = result.scalars().first()
@@ -98,7 +96,7 @@ async def register_user_endpoint(user_data: UserRegistrationRequestSchema, db: A
         await db.refresh(activation_token)
 
         activation_link = f"http://127.0.0.1:8000/auth/activate/?token={activation_token.token}"
-        await send_activation_email(recipient_email=new_user.email, activation_link=activation_link)
+        await email_sender.send_activation_email(email=new_user.email, activation_link=activation_link)
 
         return UserRegistrationResponseSchema.model_validate(new_user)
     except Exception as e:
@@ -176,7 +174,8 @@ async def activate_user_endpoint(token: str, db: AsyncSession = Depends(get_db))
               "content": {"application/json": {"example": {"detail": "Token is still valid. Check your email."}}}},
     },
 )
-async def resend_activation_endpoint(request: PasswordRequestSchema, db: AsyncSession = Depends(get_db)):
+async def resend_activation_endpoint(request: PasswordRequestSchema, db: AsyncSession = Depends(get_db),
+                                     email_sender: EmailSenderInterface = Depends(get_email_sender)):
     stmt = select(User).where(User.email == request.email)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
@@ -203,7 +202,7 @@ async def resend_activation_endpoint(request: PasswordRequestSchema, db: AsyncSe
     await db.commit()
 
     activation_link = f"http://127.0.0.1:8000/auth/activate/?token={new_token.token}"
-    await send_activation_email(user.email, activation_link)
+    await email_sender.send_activation_email(email=user.email, activation_link=activation_link)
 
     return MessageResponseSchema(message="Activation link has been sent.")
 
@@ -301,7 +300,8 @@ async def logout_endpoint(token: str, db: AsyncSession = Depends(get_db)):
     description="Request a password reset link. If user exists and active, previous tokens are invalidated.",
     status_code=status.HTTP_200_OK,
 )
-async def request_password_reset_endpoint(data: PasswordRequestSchema, db: AsyncSession = Depends(get_db)):
+async def request_password_reset_endpoint(data: PasswordRequestSchema, db: AsyncSession = Depends(get_db),
+                                          email_sender: EmailSenderInterface = Depends(get_email_sender)):
     stmt = select(User).where(User.email == data.email)
     result = await db.execute(stmt)
     user = result.scalars().first()
@@ -320,7 +320,7 @@ async def request_password_reset_endpoint(data: PasswordRequestSchema, db: Async
     await db.refresh(reset_obj)
 
     reset_link = f"http://127.0.0.1:8000/reset-password?token={token}"
-    await send_password_reset_email(user.email, reset_link)
+    await email_sender.send_password_reset_email(email=user.email, reset_link=reset_link)
 
     return MessageResponseSchema(message="If you are registered, you will receive an email with instructions.")
 
@@ -342,7 +342,8 @@ async def _get_user_by_email(db: AsyncSession, email: str):
               "content": {"application/json": {"example": {"detail": "Invalid email or token."}}}},
     },
 )
-async def reset_password_endpoint(data: PasswordResetCompleteRequestSchema, db: AsyncSession = Depends(get_db)):
+async def reset_password_endpoint(data: PasswordResetCompleteRequestSchema, db: AsyncSession = Depends(get_db),
+                                  email_sender: EmailSenderInterface = Depends(get_email_sender)):
     user = await _get_user_by_email(db, data.email)
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email or token.")
@@ -379,7 +380,7 @@ async def reset_password_endpoint(data: PasswordResetCompleteRequestSchema, db: 
                             detail="An error occurred while resetting the password.")
 
     login_link = "http://127.0.0.1:8000/auth/login/"
-    await send_password_reset_complete_email(user.email, login_link)
+    await email_sender.send_password_reset_complete_email(email=user.email, login_link=login_link)
 
     return MessageResponseSchema(message="Password reset successfully.")
 
