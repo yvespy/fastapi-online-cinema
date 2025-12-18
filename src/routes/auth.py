@@ -10,9 +10,9 @@ from starlette import status
 from src.config.dependencies import get_email_sender
 from src.database import get_db
 
-from src.models import User, UserGroup, UserGroupEnum, ActivationToken, RefreshToken, PasswordResetToken
+from src.models.accounts import User, UserGroup, UserGroupEnum, ActivationToken, RefreshToken, PasswordResetToken
 from src.notifications.interface import EmailSenderInterface
-from src.schemas import (
+from src.schemas.accounts import (
     UserRegistrationResponseSchema,
     UserRegistrationRequestSchema,
     MessageResponseSchema,
@@ -26,7 +26,7 @@ from src.schemas import (
 )
 from src.security.passwords import verify_password, hash_password, validate_password_strength
 from src.security.token_manager import create_access_token, decode_token
-from src.utils import generate_secure_token
+from src.security.utils import generate_secure_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

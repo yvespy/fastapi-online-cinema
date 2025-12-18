@@ -1,7 +1,7 @@
 from src.celery_app import celery
 from sqlalchemy import select
 from src.database import SessionLocal
-from src.models import ActivationToken
+from src.models.accounts import ActivationToken
 from datetime import datetime, timezone
 
 @celery.task

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import select
 
-from src.models import User, ActivationToken, RefreshToken
+from src.models.accounts import User, ActivationToken, RefreshToken
 from src.security.passwords import hash_password, verify_password
 from src.security.token_manager import create_access_token
 

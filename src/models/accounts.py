@@ -1,12 +1,12 @@
 from datetime import datetime, timezone, timedelta
 from enum import Enum
 
-from sqlalchemy import Column, Integer, String, Float, Enum as SqlEnum, Boolean, DateTime, ForeignKey, Text, \
+from sqlalchemy import Column, Integer, String, Enum as SqlEnum, Boolean, DateTime, ForeignKey, Text, \
     UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
-from src.utils import generate_secure_token
+from src.security.utils import generate_secure_token
 
 Base = declarative_base()
 
@@ -105,12 +105,3 @@ class RefreshToken(TokenBaseModel):
         """
         expires_at = datetime.now(timezone.utc) + timedelta(days=days_valid)
         return cls(user_id=user_id, expires_at=expires_at)
-
-
-class Film(Base):
-    __tablename__ = "films"
-
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, index=True, nullable=False)
-    genre = Column(String, index=True, nullable=False)
-    price = Column(Float, nullable=False)

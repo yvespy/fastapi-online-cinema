@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy import select
 
 from src.main import app
-from src.models import Base, UserGroupEnum, UserGroup, User
+from src.models.accounts import Base, UserGroupEnum, UserGroup, User
 from src.database import get_db
 from src.config.dependencies import get_email_sender
 from src.security.passwords import hash_password
