@@ -3,12 +3,10 @@ from enum import Enum
 
 from sqlalchemy import Column, Integer, String, Enum as SqlEnum, Boolean, DateTime, ForeignKey, Text, \
     UniqueConstraint
-from sqlalchemy.ext.declarative import declarative_base
+from src.models.base import Base
 from sqlalchemy.orm import relationship
 
 from src.security.utils import generate_secure_token
-
-Base = declarative_base()
 
 
 class UserGroupEnum(str, Enum):

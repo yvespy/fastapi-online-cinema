@@ -5,7 +5,9 @@ from sqlalchemy import pool
 
 from alembic import context
 
-from src.models import Base
+from src.models.base import Base
+
+from src.models import movies, accounts # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
