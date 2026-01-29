@@ -49,7 +49,7 @@ movie_detail_schema_example = {
         "technology is given the inverse task of planting an idea into the mind of a CEO."
     ),
     "price": 9.99,
-    "certification": certification_schema_example,
+    "certifications": certification_schema_example,
     "genres": [
         genre_schema_example
     ],
@@ -74,14 +74,23 @@ movie_create_schema_example = {
         "technology is given the inverse task of planting an idea into the mind of a CEO."
     ),
     "price": 9.99,
-    "certification": "PG-13",
+    "certifications": "PG-13",
     "genres": ["Action", "Sci-Fi"],
     "directors": ["Christopher Nolan"],
     "stars": ["Leonardo DiCaprio"],
 }
 
 movie_update_schema_example = {
-    "price": 7.99,
-    "imdb": 8.9,
-    "votes": 2300000,
+    "name": "Inception",
+    "year": 2010,
+    "time": 148,
+    "imdb": 8.8,
+    "votes": 2200000,
+    "meta_score": 74,
+    "gross": 829895144,
+    "description": (
+        "A skilled thief who steals corporate secrets through the use of dream-sharing "
+        "technology is given the inverse task of planting an idea into the mind of a CEO."
+    ),
+    "price": 9.99,
 }

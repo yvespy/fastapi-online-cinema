@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from src.schemas.examples.movies import genre_schema_example, star_schema_example, director_schema_example, \
     certification_schema_example, movie_list_item_schema_example, movie_list_response_schema_example, \
-    movie_detail_schema_example, movie_create_schema_example
+    movie_detail_schema_example, movie_create_schema_example, movie_update_schema_example
 
 
 class GenreSchema(BaseModel):
@@ -17,11 +17,7 @@ class GenreSchema(BaseModel):
     model_config = {
         "from_attributes": True,
         "json_schema_extra": {
-            "example": {
-                [
-                    genre_schema_example
-                ]
-            }
+            "example": genre_schema_example
         }
     }
 
@@ -33,11 +29,7 @@ class StarSchema(BaseModel):
     model_config = {
         "from_attributes": True,
         "json_schema_extra": {
-            "example": {
-                [
-                    star_schema_example
-                ]
-            }
+            "example": star_schema_example
         }
     }
 
@@ -49,11 +41,7 @@ class DirectorSchema(BaseModel):
     model_config = {
         "from_attributes": True,
         "json_schema_extra": {
-            "example": {
-                [
-                    director_schema_example
-                ]
-            }
+            "example": director_schema_example
         }
     }
 
@@ -65,11 +53,7 @@ class CertificationSchema(BaseModel):
     model_config = {
         "from_attributes": True,
         "json_schema_extra": {
-            "example": {
-                [
-                    certification_schema_example
-                ]
-            }
+            "example": certification_schema_example
         }
     }
 
@@ -112,11 +96,7 @@ class MovieListItemSchema(BaseModel):
     model_config = {
         "from_attributes": True,
         "json_schema_extra": {
-            "example": {
-                [
-                    movie_list_item_schema_example
-                ]
-            }
+            "example": movie_list_item_schema_example
         }
     }
 
@@ -130,11 +110,7 @@ class MovieListResponseSchema(BaseModel):
     model_config = {
         "from_attributes": True,
         "json_schema_extra": {
-            "example": {
-                [
-                    movie_list_response_schema_example
-                ]
-            }
+            "example": movie_list_response_schema_example
         }
     }
 
@@ -143,7 +119,7 @@ class MovieDetailSchema(MovieBaseSchema):
     id: int
     uuid: uuid.UUID
 
-    certification: CertificationSchema
+    certifications: CertificationSchema
     genres: List[GenreSchema]
     directors: List[DirectorSchema]
     stars: List[StarSchema]
@@ -151,11 +127,7 @@ class MovieDetailSchema(MovieBaseSchema):
     model_config = {
         "from_attributes": True,
         "json_schema_extra": {
-            "example": {
-                [
-                    movie_detail_schema_example
-                ]
-            }
+            "example": movie_detail_schema_example
         }
     }
 
@@ -175,7 +147,7 @@ class MovieCreateSchema(BaseModel):
     description: str
     price: float = Field(..., ge=0)
 
-    certification: str
+    certifications: str
 
     genres: List[str]
     directors: List[str]
@@ -183,15 +155,11 @@ class MovieCreateSchema(BaseModel):
     model_config = {
         "from_attributes": True,
         "json_schema_extra": {
-            "example": {
-                [
-                    movie_create_schema_example
-                ]
-            }
+            "example": movie_create_schema_example
         }
     }
 
-    @field_validator("certification", mode="before")
+    @field_validator("certifications", mode="before")
     @classmethod
     def normalize_certification(cls, v: str) -> str:
         return v.strip().upper()
@@ -217,36 +185,9 @@ class MovieUpdateSchema(BaseModel):
     description: Optional[str] = None
     price: Optional[Decimal] = Field(None, ge=0)
 
-    certification: Optional[str] = None
-
-    genres: Optional[List[str]] = None
-    directors: Optional[List[str]] = None
-    stars: Optional[List[str]] = None
-
     model_config = {
         "from_attributes": True,
         "json_schema_extra": {
-            "example": {
-                [
-                    movie_create_schema_example
-                ]
-            }
+            "example": movie_update_schema_example
         }
     }
-
-    @field_validator("certification", mode="before")
-    @classmethod
-    def normalize_certification(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        return v.strip().upper()
-
-    @field_validator("genres", "directors", "stars", mode="before")
-    @classmethod
-    def normalize_list_fields(
-            cls,
-            v: Optional[List[str]]
-    ) -> Optional[List[str]]:
-        if v is None:
-            return v
-        return [item.strip().title() for item in v]
