@@ -8,6 +8,7 @@ from sqlalchemy.orm import joinedload
 
 from src.database import get_db
 from src.models.movies import MovieModel, CertificationModel, GenreModel, DirectorModel, StarModel
+from src.queries.movies import apply_movie_search
 from src.schemas.movies import MovieListResponseSchema, MovieListItemSchema, MovieDetailSchema, MovieCreateSchema, \
     MovieUpdateSchema
 
@@ -17,39 +18,37 @@ router = APIRouter(prefix="/movies", tags=["movies"])
 @router.get(
     "/",
     response_model=MovieListResponseSchema,
-    summary="Get paginated list of movies.",
+    summary="Get paginated list of movies and ability to search by movie title, genre, description, director, or actor.",
 )
 async def get_movie_list(
         page: int = Query(1, ge=1),
         page_size: int = Query(10, ge=1, le=20),
+        search: str | None = Query(None),
         db: AsyncSession = Depends(get_db),
 ) -> MovieListResponseSchema:
     offset = (page - 1) * page_size
-    count_stmt = select(func.count(MovieModel.id))
+
+    stmt = select(MovieModel)
+
+    stmt = apply_movie_search(stmt, search)
+
+    count_stmt = select(func.count()).select_from(stmt.subquery())
     total_result = await db.execute(count_stmt)
     total = total_result.scalar() or 0
 
     if total == 0:
-        return MovieListResponseSchema(
-            items=[],
-            total=0,
-            page=page,
-            page_size=page_size,
-        )
+        return MovieListResponseSchema(items=[], total=0, page=page, page_size=page_size)
 
-    stmt = select(MovieModel)
     order_by = MovieModel.default_order_by()
     if order_by:
         stmt = stmt.order_by(*order_by)
+
     stmt = stmt.offset(offset).limit(page_size)
 
     result = await db.execute(stmt)
     movies = result.scalars().all()
 
-    items = [
-        MovieListItemSchema.model_validate(movie)
-        for movie in movies
-    ]
+    items = [MovieListItemSchema.model_validate(movie) for movie in movies]
 
     return MovieListResponseSchema(
         items=items,
