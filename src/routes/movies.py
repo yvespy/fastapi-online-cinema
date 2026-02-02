@@ -8,7 +8,7 @@ from sqlalchemy.orm import joinedload
 
 from src.database import get_db
 from src.models.movies import MovieModel, CertificationModel, GenreModel, DirectorModel, StarModel
-from src.queries.movies import apply_movie_search
+from src.queries.movies import apply_movie_search, apply_movie_filters, apply_movie_sorting
 from src.schemas.movies import MovieListResponseSchema, MovieListItemSchema, MovieDetailSchema, MovieCreateSchema, \
     MovieUpdateSchema
 
@@ -18,12 +18,19 @@ router = APIRouter(prefix="/movies", tags=["movies"])
 @router.get(
     "/",
     response_model=MovieListResponseSchema,
-    summary="Get paginated list of movies and ability to search by movie title, genre, description, director, or actor.",
+    summary="Get paginated list of movies and ability to search by movie title, genre, description, director, or actor. "
+            "Get sort by price, year, imdb and popularity, and filter by year and IMDB rating.",
 )
 async def get_movie_list(
         page: int = Query(1, ge=1),
         page_size: int = Query(10, ge=1, le=20),
         search: str | None = Query(None),
+        year_from: int | None = Query(None, ge=1888),
+        year_to: int | None = Query(None, ge=1888),
+        imdb_from: float | None = Query(None, ge=0, le=10),
+        imdb_to: float | None = Query(None, ge=0, le=10),
+        sort_by: str | None = Query(None),
+        sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
         db: AsyncSession = Depends(get_db),
 ) -> MovieListResponseSchema:
     offset = (page - 1) * page_size
@@ -31,6 +38,16 @@ async def get_movie_list(
     stmt = select(MovieModel)
 
     stmt = apply_movie_search(stmt, search)
+
+    stmt = apply_movie_filters(
+        stmt,
+        year_from=year_from,
+        year_to=year_to,
+        imdb_from=imdb_from,
+        imdb_to=imdb_to,
+    )
+
+    stmt = apply_movie_sorting(stmt, sort_by, sort_dir)
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total_result = await db.execute(count_stmt)
