@@ -36,6 +36,7 @@ def apply_movie_filters(
         year_to: int | None = None,
         imdb_from: int | None = None,
         imdb_to: int | None = None,
+        genre_id: int | None = None,
 ) -> Select:
     """Filter movies by year and imdb rating"""
     if year_from is not None:
@@ -49,6 +50,11 @@ def apply_movie_filters(
 
     if imdb_to is not None:
         stmt = stmt.where(MovieModel.imdb <= imdb_to)
+
+    if genre_id:
+        stmt = stmt.where(
+            MovieModel.genres.any(GenreModel.id == genre_id)
+        )
 
     return stmt
 

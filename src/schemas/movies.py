@@ -22,6 +22,12 @@ class GenreSchema(BaseModel):
     }
 
 
+class GenreWithCountSchema(BaseModel):
+    id: int
+    name: str
+    movie_count: int
+
+
 class StarSchema(BaseModel):
     id: int
     name: str

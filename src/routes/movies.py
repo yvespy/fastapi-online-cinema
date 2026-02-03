@@ -29,6 +29,7 @@ async def get_movie_list(
         year_to: int | None = Query(None, ge=1888),
         imdb_from: float | None = Query(None, ge=0, le=10),
         imdb_to: float | None = Query(None, ge=0, le=10),
+        genre_id: int | None = Query(None, ge=1),
         sort_by: str | None = Query(None),
         sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
         db: AsyncSession = Depends(get_db),
@@ -45,6 +46,7 @@ async def get_movie_list(
         year_to=year_to,
         imdb_from=imdb_from,
         imdb_to=imdb_to,
+        genre_id=genre_id,
     )
 
     stmt = apply_movie_sorting(stmt, sort_by, sort_dir)
