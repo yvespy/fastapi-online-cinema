@@ -6,6 +6,7 @@ from sqlalchemy import Column, Integer, String, Enum as SqlEnum, Boolean, DateTi
 from src.models.base import Base
 from sqlalchemy.orm import relationship
 
+from src.models.movies import user_favorites
 from src.security.utils import generate_secure_token
 
 
@@ -44,6 +45,7 @@ class User(Base):
     password_reset_token = relationship("PasswordResetToken", back_populates="user", uselist=False)
     refresh_token = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     profile = relationship("UserProfileModel", back_populates="user", uselist=False)
+    favorites = relationship("MovieModel", secondary=user_favorites, back_populates="favorites_by")
 
 
 class UserProfileModel(Base):

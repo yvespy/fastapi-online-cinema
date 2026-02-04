@@ -1,7 +1,7 @@
 """seed data for user groups
 
 Revision ID: 66e12caa2ffd
-Revises: de3256a164f5
+Revises: 4e9bbca0d153
 Create Date: 2025-12-18 02:37:21.655211
 
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '66e12caa2ffd'
-down_revision: Union[str, Sequence[str], None] = 'de3256a164f5'
+down_revision: Union[str, Sequence[str], None] = '7516fb0e9ef7'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
