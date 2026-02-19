@@ -37,6 +37,14 @@ movie_stars = Table(
         ForeignKey("stars.id", ondelete="CASCADE"), primary_key=True, nullable=False)
 )
 
+user_favorites = Table(
+    "user_favorites",
+    Base.metadata,
+    Column("user_id", ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("movie_id", ForeignKey("movies.id", ondelete="CASCADE"), primary_key=True),
+    UniqueConstraint("user_id", "movie_id", name="uq_movie_favorites"),
+)
+
 
 class GenreModel(Base):
     __tablename__ = "genres"
@@ -124,6 +132,11 @@ class MovieModel(Base):
         "StarModel",
         secondary=movie_stars,
         back_populates="movies",
+    )
+    favorites_by = relationship(
+        "User",
+        secondary=user_favorites,
+        back_populates="favorites",
     )
 
     __table_args__ = (
