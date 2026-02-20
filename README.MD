@@ -132,6 +132,26 @@ celery -A src.celery_app.celery worker --loglevel=info
 ```
 celery -A src.celery_app.celery beat --loglevel=info
 ```
+## Running with Docker
+### Build and Start Containers
+From the root of the project, run:
+```bash
+docker-compose up --build
+```
+This will start:
+
+**`online-cinema-app`** – FastAPI application
+
+**`online-cinema-db`** – PostgreSQL database
+
+The first time you run this, the database will be initialized automatically.
+### Environment Variables
+Docker reads environment variables from **`.env`**. Make sure you have configured at least the database URL:
+```
+DATABASE_URL=postgresql+asyncpg://postgres:password@online-cinema-db:5432/online_cinema
+```
+- Replace **`password`** with your desired PostgreSQL password.
+- **`online-cinema-db`** is the name of PostgreSQL container
 
 ## API Documentation
 Interactive documentation is available:
