@@ -72,6 +72,7 @@ def override_db():
     yield
     app.dependency_overrides.clear()
 
+
 @pytest_asyncio.fixture(scope="function")
 async def email_sender_stub():
     return StubEmailSender()
@@ -120,3 +121,10 @@ async def seed_user_groups(db_session: AsyncSession):
 
     await db_session.commit()
     yield
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def clear_db(db_session: AsyncSession):
+    for table in reversed(Base.metadata.sorted_tables):
+        await db_session.execute(table.delete())
+    await db_session.commit()

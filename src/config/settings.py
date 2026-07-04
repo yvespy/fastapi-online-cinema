@@ -3,6 +3,8 @@ import os
 
 
 class Settings(BaseSettings):
+    database_url: str
+
     SMTP_SERVER: str = os.getenv("SMTP_SERVER", "localhost")
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", 25))
     SMTP_USERNAME: str | None = os.getenv("SMTP_USERNAME", None)
